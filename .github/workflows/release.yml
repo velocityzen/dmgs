@@ -37,9 +37,9 @@ jobs:
           cp .build/arm64-apple-macosx/release/dmgs release/dmgs
           chmod +x release/dmgs
           cd release
-          tar -czf ../dmgs-macos-arm64-${{ steps.version.outputs.tag }}.tar.gz dmgs
+          tar -czf ../dmgs.tar.gz dmgs
 
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
-          files: "./dmgs-macos-arm64-${{ steps.version.outputs.tag }}.tar.gz"
+          files: "./dmgs.tar.gz"

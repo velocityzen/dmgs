@@ -6,7 +6,7 @@ import PackageDescription
 let package = Package(
     name: "dmgs",
     platforms: [
-        .macOS(.v13)
+        .macOS(.v15)
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.5.0"),
@@ -18,20 +18,25 @@ let package = Package(
             dependencies: [
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
                 "DMGBuilder",
+            ],
+            swiftSettings: [
+                .swiftLanguageMode(.v6)
             ]
         ),
         .target(
             name: "DMGBuilder",
             dependencies: [
                 .product(name: "Subprocess", package: "swift-subprocess")
+            ],
+            swiftSettings: [
+                .swiftLanguageMode(.v6)
             ]
         ),
         .testTarget(
             name: "DMGBuilderTests",
             dependencies: ["DMGBuilder"],
             swiftSettings: [
-                .enableUpcomingFeature("BareSlashRegexLiterals"),
-                .enableExperimentalFeature("StrictConcurrency"),
+                .swiftLanguageMode(.v6)
             ]
         ),
     ]
