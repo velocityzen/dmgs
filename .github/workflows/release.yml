@@ -33,10 +33,10 @@ jobs:
 
       - name: Prepare Binary
         run: |
-          mkdir -p release
-          cp .build/arm64-apple-macosx/release/dmgs release/dmgs
-          chmod +x release/dmgs
-          cd release
+          mkdir -p export
+          cp .build/arm64-apple-macosx/release/dmgs export/dmgs
+          chmod +x export/dmgs
+          cd export
           tar -czf ../dmgs.tar.gz dmgs
 
       - name: Release
