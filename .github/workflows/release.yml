@@ -1,0 +1,45 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "*"
+
+jobs:
+  build-and-release:
+    name: Build and Upload Release Assets
+    runs-on: macos-26
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Get Version from Tag
+        id: version
+        run: echo "tag=${GITHUB_REF#refs/*/}" >> $GITHUB_OUTPUT
+
+      - name: Select Xcode
+        run: |
+          sudo xcode-select -s /Applications/Xcode_26.1.app/Contents/Developer
+          xcodebuild -version
+
+      - name: Check Swift Version
+        run: swift --version
+
+      - name: Build Release Binary
+        run: |
+          swift build -c release --arch arm64 -Xswiftc -O -Xswiftc -whole-module-optimization  -Xswiftc -cross-module-optimization
+          strip .build/release/dmgs
+
+      - name: Prepare Binary
+        run: |
+          mkdir -p release
+          cp .build/arm64-apple-macosx/release/dmgs release/dmgs
+          chmod +x release/dmgs
+          cd release
+          tar -czf ../dmgs-macos-arm64-${{ steps.version.outputs.tag }}.tar.gz dmgs
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: "./dmgs-macos-arm64-${{ steps.version.outputs.tag }}.tar.gz"
