@@ -1,4 +1,5 @@
 import Foundation
+import Subprocess
 
 /// Main DMG builder that orchestrates the creation process
 public struct DMGBuilder {
@@ -25,16 +26,17 @@ public struct DMGBuilder {
     }
 
     /// Builds the DMG with the given configuration
-    public func build(configuration: DMGConfiguration) throws {
+    public func build(configuration: DMGConfiguration) async throws {
         try validate(configuration: configuration)
         try cleanupExistingFiles(configuration: configuration)
-        try createTemporaryDMG(configuration: configuration)
-        try mountDMG(configuration: configuration)
-        try populateDMG(configuration: configuration)
-        try customizeDMG(configuration: configuration)
-        try unmountDMG(configuration: configuration)
-        try convertToFinalDMG(configuration: configuration)
+        try await createTemporaryDMG(configuration: configuration)
+        try await mountDMG(configuration: configuration)
+        try await populateDMG(configuration: configuration)
+        try await customizeDMG(configuration: configuration)
+        try await unmountDMG(configuration: configuration)
+        try await convertToFinalDMG(configuration: configuration)
         try setDMGIcon(configuration: configuration)
+        try await signDMG(configuration: configuration)
         try cleanupTemporaryFiles(configuration: configuration)
     }
 
@@ -45,8 +47,8 @@ public struct DMGBuilder {
         try? fileManager.removeItem(atPath: configuration.tempDMGPath)
     }
 
-    private func createTemporaryDMG(configuration: DMGConfiguration) throws {
-        try shellExecutor.execute(
+    private func createTemporaryDMG(configuration: DMGConfiguration) async throws {
+        try await shellExecutor.execute(
             "hdiutil",
             arguments: [
                 "create",
@@ -57,8 +59,8 @@ public struct DMGBuilder {
             ])
     }
 
-    private func mountDMG(configuration: DMGConfiguration) throws {
-        try shellExecutor.execute(
+    private func mountDMG(configuration: DMGConfiguration) async throws {
+        try await shellExecutor.execute(
             "hdiutil",
             arguments: [
                 "attach",
@@ -66,19 +68,19 @@ public struct DMGBuilder {
             ])
 
         // Wait for mount to complete
-        Thread.sleep(forTimeInterval: 1)
+        try await Task.sleep(nanoseconds: 1_000_000_000)
 
         guard fileManager.fileExists(atPath: configuration.volumeMountPath) else {
             throw DMGBuilderError.volumeNotMounted(path: configuration.volumeMountPath)
         }
     }
 
-    private func populateDMG(configuration: DMGConfiguration) throws {
+    private func populateDMG(configuration: DMGConfiguration) async throws {
         let appFileName = URL(fileURLWithPath: configuration.appPath).lastPathComponent
         let appDestination = "\(configuration.volumeMountPath)/\(appFileName)"
 
         // Copy app
-        try shellExecutor.execute(
+        try await shellExecutor.execute(
             "cp",
             arguments: [
                 "-R",
@@ -87,7 +89,7 @@ public struct DMGBuilder {
             ])
 
         // Create Applications symlink
-        try shellExecutor.execute(
+        try await shellExecutor.execute(
             "ln",
             arguments: [
                 "-s",
@@ -111,7 +113,7 @@ public struct DMGBuilder {
         )
     }
 
-    private func customizeDMG(configuration: DMGConfiguration) throws {
+    private func customizeDMG(configuration: DMGConfiguration) async throws {
         let appFileName = URL(fileURLWithPath: configuration.appPath).lastPathComponent
         let backgroundFileName = URL(fileURLWithPath: configuration.backgroundPath)
             .lastPathComponent
@@ -126,14 +128,14 @@ public struct DMGBuilder {
             applicationsPosition: configuration.applicationsPosition
         )
 
-        try shellExecutor.executeAppleScript(script)
+        try await shellExecutor.executeAppleScript(script)
 
         // Wait for Finder to apply changes
-        Thread.sleep(forTimeInterval: 2)
+        try await Task.sleep(nanoseconds: 2_000_000_000)
     }
 
-    private func unmountDMG(configuration: DMGConfiguration) throws {
-        try shellExecutor.execute(
+    private func unmountDMG(configuration: DMGConfiguration) async throws {
+        try await shellExecutor.execute(
             "hdiutil",
             arguments: [
                 "detach",
@@ -141,8 +143,8 @@ public struct DMGBuilder {
             ])
     }
 
-    private func convertToFinalDMG(configuration: DMGConfiguration) throws {
-        try shellExecutor.execute(
+    private func convertToFinalDMG(configuration: DMGConfiguration) async throws {
+        try await shellExecutor.execute(
             "hdiutil",
             arguments: [
                 "convert",
@@ -153,11 +155,63 @@ public struct DMGBuilder {
     }
 
     private func setDMGIcon(configuration: DMGConfiguration) throws {
-        try DMGIconSetter.setIcon(
+        try DMGIcon.setIcon(
             dmgPath: configuration.outputPath,
             appPath: configuration.appPath,
             fileManager: fileManager
         )
+    }
+
+    private func signDMG(configuration: DMGConfiguration) async throws {
+        guard let identity = configuration.signingIdentity else {
+            // No signing requested
+            return
+        }
+
+        // Sign the DMG using codesign
+        try await shellExecutor.execute(
+            "codesign",
+            arguments: [
+                "--sign", identity,
+                "--force",
+                "--verbose",
+                configuration.outputPath,
+            ]
+        )
+
+        // Verify the signature
+        try await verifySignature(configuration: configuration)
+    }
+
+    private func verifySignature(configuration: DMGConfiguration) async throws {
+        // Use codesign --display --verbose to check the signature
+        let result = try await Subprocess.run(
+            .name("codesign"),
+            arguments: Arguments([
+                "--display",
+                "--verbose=4",
+                configuration.outputPath,
+            ]),
+            output: .data(limit: 1024 * 1024),
+            error: .data(limit: 1024 * 1024)
+        )
+
+        guard result.terminationStatus.isSuccess else {
+            throw DMGBuilderError.commandFailed(
+                command: "codesign --display",
+                output: "Failed to verify signature"
+            )
+        }
+
+        // Check that Authority is present in the output (codesign writes to stderr)
+        let output = String(decoding: result.standardError, as: UTF8.self)
+
+        if !output.contains("Authority=") {
+            throw DMGBuilderError.commandFailed(
+                command: "codesign --display",
+                output: "No Authority flag found in signature. Output:\n\(output)"
+            )
+        }
     }
 
     private func cleanupTemporaryFiles(configuration: DMGConfiguration) throws {

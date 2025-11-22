@@ -11,9 +11,9 @@ public struct DMGConfiguration {
     public let windowBounds: (x: Int, y: Int, width: Int, height: Int)
     public let appPosition: (x: Int, y: Int)
     public let applicationsPosition: (x: Int, y: Int)
+    public let signingIdentity: String?
 
     public init(
-        appName: String,
         appPath: String,
         backgroundPath: String,
         outputDirectory: String = FileManager.default.currentDirectoryPath,
@@ -21,14 +21,22 @@ public struct DMGConfiguration {
         iconSize: Int = 100,
         windowBounds: (x: Int, y: Int, width: Int, height: Int)? = nil,
         appPosition: (x: Int, y: Int)? = nil,
-        applicationsPosition: (x: Int, y: Int)? = nil
-    ) throws {
-        self.appName = appName
+        applicationsPosition: (x: Int, y: Int)? = nil,
+        signingIdentity: String? = nil
+    ) async throws {
+        // Extract app name from Info.plist
+        self.appName = try Self.extractAppName(from: appPath)
         self.appPath = appPath
         self.backgroundPath = backgroundPath
         self.outputDirectory = outputDirectory
         self.volumeSize = volumeSize
         self.iconSize = iconSize
+
+        // Validate signing identity if provided
+        if let identity = signingIdentity {
+            try await Self.validateSigningIdentity(identity)
+        }
+        self.signingIdentity = signingIdentity
 
         // Get image size once
         let imageSize = try ImageSize.getImageSize(at: backgroundPath)
@@ -38,6 +46,31 @@ public struct DMGConfiguration {
         self.appPosition = appPosition ?? Self.calculateAppPosition(imageSize: imageSize)
         self.applicationsPosition =
             applicationsPosition ?? Self.calculateApplicationsPosition(imageSize: imageSize)
+    }
+
+    /// Extract app name from the app bundle's Info.plist
+    private static func extractAppName(from appPath: String) throws -> String {
+        let infoPlistPath = "\(appPath)/Contents/Info.plist"
+
+        guard let infoPlist = NSDictionary(contentsOfFile: infoPlistPath) else {
+            // Fallback to bundle name from path if Info.plist can't be read
+            let bundleName = URL(fileURLWithPath: appPath).deletingPathExtension().lastPathComponent
+            return bundleName
+        }
+
+        // Try CFBundleDisplayName first, then CFBundleName, then fall back to bundle name
+        if let displayName = infoPlist["CFBundleDisplayName"] as? String, !displayName.isEmpty {
+            return displayName
+        } else if let bundleName = infoPlist["CFBundleName"] as? String, !bundleName.isEmpty {
+            return bundleName
+        } else {
+            return URL(fileURLWithPath: appPath).deletingPathExtension().lastPathComponent
+        }
+    }
+
+    /// Validate that the signing identity exists in the keychain
+    private static func validateSigningIdentity(_ identity: String) async throws {
+        try await SigningIdentity.validate(identity)
     }
 
     /// Calculate window bounds from image size

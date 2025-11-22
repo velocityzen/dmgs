@@ -48,14 +48,40 @@ struct DMGConfigurationTests {
         return imagePath
     }
 
-    @Test("Configuration generates correct output path")
-    func outputPath() throws {
-        let imagePath = try createTestImage(width: 600, height: 400)
-        defer { try? FileManager.default.removeItem(atPath: imagePath) }
+    // Helper to create a temporary test app bundle with Info.plist
+    func createTestApp(name: String = "TestApp") throws -> String {
+        let tempDir = FileManager.default.temporaryDirectory
+        let appPath = tempDir.appendingPathComponent("\(name)-\(UUID().uuidString).app").path
+        let contentsPath = "\(appPath)/Contents"
 
-        let config = try DMGConfiguration(
-            appName: "TestApp",
-            appPath: "/path/to/Test.app",
+        try FileManager.default.createDirectory(
+            atPath: contentsPath,
+            withIntermediateDirectories: true
+        )
+
+        let infoPlistPath = "\(contentsPath)/Info.plist"
+        let plistDict: NSDictionary = [
+            "CFBundleName": name,
+            "CFBundleDisplayName": name,
+            "CFBundleIdentifier": "com.test.\(name)",
+            "CFBundleVersion": "1.0",
+        ]
+
+        plistDict.write(toFile: infoPlistPath, atomically: true)
+        return appPath
+    }
+
+    @Test("Configuration generates correct output path")
+    func outputPath() async throws {
+        let imagePath = try createTestImage(width: 600, height: 400)
+        let appPath = try createTestApp(name: "TestApp")
+        defer {
+            try? FileManager.default.removeItem(atPath: imagePath)
+            try? FileManager.default.removeItem(atPath: appPath)
+        }
+
+        let config = try await DMGConfiguration(
+            appPath: appPath,
             backgroundPath: imagePath,
             outputDirectory: "/tmp",
             windowBounds: (100, 100, 600, 400),
@@ -67,13 +93,16 @@ struct DMGConfigurationTests {
     }
 
     @Test("Configuration generates correct temporary DMG path")
-    func tempDMGPath() throws {
+    func tempDMGPath() async throws {
         let imagePath = try createTestImage(width: 600, height: 400)
-        defer { try? FileManager.default.removeItem(atPath: imagePath) }
+        let appPath = try createTestApp(name: "TestApp")
+        defer {
+            try? FileManager.default.removeItem(atPath: imagePath)
+            try? FileManager.default.removeItem(atPath: appPath)
+        }
 
-        let config = try DMGConfiguration(
-            appName: "TestApp",
-            appPath: "/path/to/Test.app",
+        let config = try await DMGConfiguration(
+            appPath: appPath,
             backgroundPath: imagePath,
             outputDirectory: "/tmp",
             windowBounds: (100, 100, 600, 400),
@@ -85,13 +114,16 @@ struct DMGConfigurationTests {
     }
 
     @Test("Configuration generates correct volume mount path")
-    func volumeMountPath() throws {
+    func volumeMountPath() async throws {
         let imagePath = try createTestImage(width: 600, height: 400)
-        defer { try? FileManager.default.removeItem(atPath: imagePath) }
+        let appPath = try createTestApp(name: "TestApp")
+        defer {
+            try? FileManager.default.removeItem(atPath: imagePath)
+            try? FileManager.default.removeItem(atPath: appPath)
+        }
 
-        let config = try DMGConfiguration(
-            appName: "TestApp",
-            appPath: "/path/to/Test.app",
+        let config = try await DMGConfiguration(
+            appPath: appPath,
             backgroundPath: imagePath,
             windowBounds: (100, 100, 600, 400),
             appPosition: (150, 200),
@@ -102,13 +134,16 @@ struct DMGConfigurationTests {
     }
 
     @Test("Configuration uses custom settings when provided")
-    func customSettings() throws {
+    func customSettings() async throws {
         let imagePath = try createTestImage(width: 600, height: 400)
-        defer { try? FileManager.default.removeItem(atPath: imagePath) }
+        let appPath = try createTestApp(name: "CustomApp")
+        defer {
+            try? FileManager.default.removeItem(atPath: imagePath)
+            try? FileManager.default.removeItem(atPath: appPath)
+        }
 
-        let config = try DMGConfiguration(
-            appName: "CustomApp",
-            appPath: "/custom/path.app",
+        let config = try await DMGConfiguration(
+            appPath: appPath,
             backgroundPath: imagePath,
             outputDirectory: "/output",
             volumeSize: "500m",
@@ -126,13 +161,16 @@ struct DMGConfigurationTests {
     }
 
     @Test("Configuration calculates window bounds from image size")
-    func autoWindowBounds() throws {
+    func autoWindowBounds() async throws {
         let imagePath = try createTestImage(width: 600, height: 400)
-        defer { try? FileManager.default.removeItem(atPath: imagePath) }
+        let appPath = try createTestApp(name: "TestApp")
+        defer {
+            try? FileManager.default.removeItem(atPath: imagePath)
+            try? FileManager.default.removeItem(atPath: appPath)
+        }
 
-        let config = try DMGConfiguration(
-            appName: "TestApp",
-            appPath: "/path/to/Test.app",
+        let config = try await DMGConfiguration(
+            appPath: appPath,
             backgroundPath: imagePath
         )
 
@@ -145,13 +183,16 @@ struct DMGConfigurationTests {
     }
 
     @Test("Configuration calculates app position from image size")
-    func autoAppPosition() throws {
+    func autoAppPosition() async throws {
         let imagePath = try createTestImage(width: 800, height: 600)
-        defer { try? FileManager.default.removeItem(atPath: imagePath) }
+        let appPath = try createTestApp(name: "TestApp")
+        defer {
+            try? FileManager.default.removeItem(atPath: imagePath)
+            try? FileManager.default.removeItem(atPath: appPath)
+        }
 
-        let config = try DMGConfiguration(
-            appName: "TestApp",
-            appPath: "/path/to/Test.app",
+        let config = try await DMGConfiguration(
+            appPath: appPath,
             backgroundPath: imagePath
         )
 
@@ -161,13 +202,16 @@ struct DMGConfigurationTests {
     }
 
     @Test("Configuration calculates Applications position from image size")
-    func autoApplicationsPosition() throws {
+    func autoApplicationsPosition() async throws {
         let imagePath = try createTestImage(width: 800, height: 600)
-        defer { try? FileManager.default.removeItem(atPath: imagePath) }
+        let appPath = try createTestApp(name: "TestApp")
+        defer {
+            try? FileManager.default.removeItem(atPath: imagePath)
+            try? FileManager.default.removeItem(atPath: appPath)
+        }
 
-        let config = try DMGConfiguration(
-            appName: "TestApp",
-            appPath: "/path/to/Test.app",
+        let config = try await DMGConfiguration(
+            appPath: appPath,
             backgroundPath: imagePath
         )
 
@@ -210,10 +254,9 @@ struct DMGConfigurationStaticTests {
 @Suite("DMG Builder Validation Tests")
 struct DMGBuilderValidationTests {
     @Test("Validation fails when app file doesn't exist")
-    func appNotFound() {
-        #expect(throws: Error.self) {
-            try DMGConfiguration(
-                appName: "TestApp",
+    func appNotFound() async {
+        await #expect(throws: Error.self) {
+            try await DMGConfiguration(
                 appPath: "/nonexistent/Test.app",
                 backgroundPath: "/nonexistent/bg.png"
             )

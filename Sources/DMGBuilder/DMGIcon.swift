@@ -1,8 +1,8 @@
 import Foundation
 import AppKit
 
-/// Helper to set custom icons on files
-enum DMGIconSetter {
+/// Utilities for setting custom icons on DMG files
+enum DMGIcon {
     /// Sets the DMG file icon by compositing the app icon onto a drive icon
     static func setIcon(dmgPath: String, appPath: String, fileManager: FileManager) throws {
         let appURL = URL(fileURLWithPath: appPath)

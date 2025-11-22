@@ -1,30 +1,27 @@
 import Foundation
+import Subprocess
 
 /// Protocol for executing shell commands (makes testing easier)
 public protocol ShellExecuting {
-    func execute(_ command: String, arguments: [String]) throws
-    func executeAppleScript(_ script: String) throws
+    func execute(_ command: String, arguments: [String]) async throws
+    func executeAppleScript(_ script: String) async throws
 }
 
-/// Default implementation using Process
+/// Default implementation using swift-subprocess
 public struct ShellExecutor: ShellExecuting {
     public init() {}
 
-    public func execute(_ command: String, arguments: [String]) throws {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = [command] + arguments
+    public func execute(_ command: String, arguments: [String]) async throws {
+        let result = try await Subprocess.run(
+            .name(command),
+            arguments: Arguments(arguments),
+            output: .data(limit: 1024 * 1024),
+            error: .data(limit: 1024 * 1024)
+        )
 
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-
-        try process.run()
-        process.waitUntilExit()
-
-        if process.terminationStatus != 0 {
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            let output = String(data: data, encoding: .utf8) ?? ""
+        guard result.terminationStatus.isSuccess else {
+            let output = String(
+                decoding: result.standardOutput + result.standardError, as: UTF8.self)
             throw DMGBuilderError.commandFailed(
                 command: "\(command) \(arguments.joined(separator: " "))",
                 output: output
@@ -32,21 +29,17 @@ public struct ShellExecutor: ShellExecuting {
         }
     }
 
-    public func executeAppleScript(_ script: String) throws {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-        process.arguments = ["-e", script]
+    public func executeAppleScript(_ script: String) async throws {
+        let result = try await Subprocess.run(
+            .name("osascript"),
+            arguments: Arguments(["-e", script]),
+            output: .data(limit: 1024 * 1024),
+            error: .data(limit: 1024 * 1024)
+        )
 
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-
-        try process.run()
-        process.waitUntilExit()
-
-        if process.terminationStatus != 0 {
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            let output = String(data: data, encoding: .utf8) ?? ""
+        guard result.terminationStatus.isSuccess else {
+            let output = String(
+                decoding: result.standardOutput + result.standardError, as: UTF8.self)
             throw DMGBuilderError.appleScriptFailed(output: output)
         }
     }
