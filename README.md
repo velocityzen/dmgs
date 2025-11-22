@@ -11,10 +11,6 @@ A simple CLI tool to create professional DMG installers for macOS applications.
 - Sets custom DMG icon by compositing app icon onto drive icon
 - Code signing support with identity validation
 - Compresses final DMG for distribution
-- Async/await based architecture using swift-subprocess
-- Clean, testable architecture with separated concerns
-- Built with Swift Argument Parser for robust CLI handling
-- Modern Swift Testing framework (not XCTest)
 
 ## Installation
 
