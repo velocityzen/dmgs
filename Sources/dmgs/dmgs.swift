@@ -28,9 +28,6 @@ struct DMGs: ParsableCommand {
         name: .shortAndLong, help: "Output directory for the DMG (defaults to current directory)")
     var output: String?
 
-    @Option(name: .shortAndLong, help: "DMG volume size (default: 200m)")
-    var size: String = "200m"
-
     @Option(help: "Icon size in the DMG window (default: 100)")
     var iconSize: Int = 100
 
@@ -44,7 +41,6 @@ struct DMGs: ParsableCommand {
                 appPath: appPath,
                 backgroundPath: backgroundPath,
                 outputDirectory: output ?? FileManager.default.currentDirectoryPath,
-                volumeSize: size,
                 iconSize: iconSize
             )
 
@@ -56,7 +52,6 @@ struct DMGs: ParsableCommand {
                 print("  App Path: \(appPath)")
                 print("  Background: \(backgroundPath)")
                 print("  Output: \(configuration.outputPath)")
-                print("  Volume Size: \(size)")
                 print("  Icon Size: \(iconSize)")
                 print("  Window Bounds: \(configuration.windowBounds)")
                 print("  App Position: \(configuration.appPosition)")
