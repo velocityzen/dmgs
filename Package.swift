@@ -18,26 +18,18 @@ let package = Package(
             dependencies: [
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
                 "DMGBuilder",
-            ],
-            swiftSettings: [
-                .swiftLanguageMode(.v6)
             ]
         ),
         .target(
             name: "DMGBuilder",
             dependencies: [
                 .product(name: "Subprocess", package: "swift-subprocess")
-            ],
-            swiftSettings: [
-                .swiftLanguageMode(.v6)
             ]
         ),
         .testTarget(
             name: "DMGBuilderTests",
             dependencies: ["DMGBuilder"],
-            swiftSettings: [
-                .swiftLanguageMode(.v6)
-            ]
         ),
-    ]
+    ],
+    swiftLanguageModes: [.v6],
 )
