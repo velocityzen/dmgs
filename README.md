@@ -126,17 +126,6 @@ swift test
 
 The DMG window is automatically sized to match your background image, and icons are positioned proportionally, ensuring a perfect fit with no manual positioning needed.
 
-## Dependencies
-
-- [swift-argument-parser](https://github.com/apple/swift-argument-parser) - Command line argument parsing
-- [swift-subprocess](https://github.com/swiftlang/swift-subprocess) - Modern async subprocess execution
-
-## Requirements
-
-- macOS 13.0 or later
-- Swift 6.2 or later
-- Xcode command line tools
-
 ## License
 
 MIT
