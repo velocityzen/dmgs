@@ -11,6 +11,7 @@ A simple CLI tool to create professional DMG installers for macOS applications.
 - Sets custom DMG icon by compositing app icon onto drive icon
 - Code signing support with identity validation
 - Compresses final DMG for distribution
+- Markdown to HTML or Slack mrkdwn conversion
 
 ## Installation
 
@@ -46,6 +47,12 @@ dmgs create <app-path> <background-path> [options]
 dmgs identities
 ```
 
+### Convert Markdown to HTML or Slack mrkdwn
+
+```bash
+dmgs markdown <input-path> [options]
+```
+
 ### Arguments
 
 - `app-path` - Path to the .app bundle
@@ -53,13 +60,18 @@ dmgs identities
 
 The app name is automatically extracted from the bundle's `CFBundleDisplayName` or `CFBundleName` in Info.plist.
 
-### Options
+### Create Options
 
 - `-o, --output <directory>` - Output directory for the DMG (defaults to current directory)
 - `--icon-size <size>` - Icon size in the DMG window (default: 100)
 - `--sign <identity>` - Code signing identity to sign the DMG (e.g., "Developer ID Application")
 - `-v, --verbose` - Show verbose output
 - `-h, --help` - Show help information
+
+### Markdown Options
+
+- `-o, --output <path>` - Output file path (prints to stdout if not specified)
+- `--slack` - Output Slack mrkdwn format instead of HTML
 
 ### Examples
 
@@ -85,6 +97,23 @@ List available signing identities:
 dmgs identities
 ```
 
+Convert Markdown to HTML:
+
+```bash
+dmgs markdown "/path/to/changelog.md"
+```
+
+Convert Markdown to Slack mrkdwn:
+
+```bash
+dmgs markdown "/path/to/changelog.md" --slack
+```
+
+Save to file:
+
+```bash
+dmgs markdown "/path/to/changelog.md" --output "/path/to/output.html"
+```
 
 ### Testing
 
