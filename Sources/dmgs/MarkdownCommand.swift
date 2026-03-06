@@ -10,8 +10,8 @@ extension DMGs {
             abstract: "Convert a Markdown file to HTML or Slack mrkdwn"
         )
 
-        @Argument(help: "Path to the .md file to convert.")
-        var inputPath: String
+        @Argument(help: "Path to the .md file to convert. Reads from stdin if not specified.")
+        var inputPath: String?
 
         @Option(name: .shortAndLong, help: "Output file path. Prints to stdout if not specified.")
         var output: String?
@@ -20,13 +20,24 @@ extension DMGs {
         var slack: Bool = false
 
         mutating func run() async throws {
-            let inputURL = URL(filePath: inputPath)
+            let source: String
 
-            guard FileManager.default.fileExists(atPath: inputURL.path) else {
-                throw ValidationError("File not found: \(inputPath)")
+            if let inputPath {
+                let inputURL = URL(filePath: inputPath)
+
+                guard FileManager.default.fileExists(atPath: inputURL.path) else {
+                    throw ValidationError("File not found: \(inputPath)")
+                }
+
+                source = try String(contentsOf: inputURL, encoding: .utf8)
+            } else {
+                guard let data = try FileHandle.standardInput.readToEnd(),
+                      let text = String(data: data, encoding: .utf8)
+                else {
+                    throw ValidationError("Failed to read from stdin")
+                }
+                source = text
             }
-
-            let source = try String(contentsOf: inputURL, encoding: .utf8)
             let document = Document(parsing: source)
             let result = slack
                 ? SlackFormatter.format(document)
