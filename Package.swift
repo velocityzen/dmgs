@@ -11,12 +11,14 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.5.0"),
         .package(url: "https://github.com/swiftlang/swift-subprocess.git", from: "0.2.0"),
+        .package(url: "https://github.com/swiftlang/swift-markdown.git", from: "0.7.3"),
     ],
     targets: [
         .executableTarget(
             name: "dmgs",
             dependencies: [
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
+                .product(name: "Markdown", package: "swift-markdown"),
                 "DMGBuilder",
             ]
         ),
@@ -29,6 +31,13 @@ let package = Package(
         .testTarget(
             name: "DMGBuilderTests",
             dependencies: ["DMGBuilder"],
+        ),
+        .testTarget(
+            name: "dmgsTests",
+            dependencies: [
+                "dmgs",
+                .product(name: "Markdown", package: "swift-markdown"),
+            ]
         ),
     ],
     swiftLanguageModes: [.v6],

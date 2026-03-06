@@ -14,6 +14,7 @@ struct DMGs: AsyncParsableCommand {
         subcommands: [
             Create.self,
             Identities.self,
+            MarkdownToHTML.self,
         ],
         defaultSubcommand: Create.self
     )
