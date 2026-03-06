@@ -30,14 +30,24 @@ public struct DMGBuilder {
         try validate(configuration: configuration)
         try cleanupExistingFiles(configuration: configuration)
         try await createTemporaryDMG(configuration: configuration)
+
+        // Ensure volume is unmounted on failure after mounting
         try await mountDMG(configuration: configuration)
-        try await populateDMG(configuration: configuration)
-        try await customizeDMG(configuration: configuration)
+        do {
+            try await populateDMG(configuration: configuration)
+            try await customizeDMG(configuration: configuration)
+        } catch {
+            try? await unmountDMG(configuration: configuration)
+            throw error
+        }
         try await unmountDMG(configuration: configuration)
+
         try await convertToFinalDMG(configuration: configuration)
-        try setDMGIcon(configuration: configuration)
+        try await setDMGIcon(configuration: configuration)
         try await signDMG(configuration: configuration)
-        try cleanupTemporaryFiles(configuration: configuration)
+
+        // Cleanup is best-effort — don't fail the build if temp removal fails
+        try? fileManager.removeItem(atPath: configuration.tempDMGPath)
     }
 
     // MARK: - Private Methods
@@ -67,16 +77,19 @@ public struct DMGBuilder {
                 configuration.tempDMGPath,
             ])
 
-        // Wait for mount to complete
-        try await Task.sleep(nanoseconds: 1_000_000_000)
-
-        guard fileManager.fileExists(atPath: configuration.volumeMountPath) else {
-            throw DMGBuilderError.volumeNotMounted(path: configuration.volumeMountPath)
+        // Poll for mount readiness instead of fixed sleep
+        for _ in 0..<10 {
+            if fileManager.fileExists(atPath: configuration.volumeMountPath) {
+                return
+            }
+            try await Task.sleep(nanoseconds: 500_000_000)
         }
+
+        throw DMGBuilderError.volumeNotMounted(path: configuration.volumeMountPath)
     }
 
     private func populateDMG(configuration: DMGConfiguration) async throws {
-        let appFileName = URL(fileURLWithPath: configuration.appPath).lastPathComponent
+        let appFileName = URL(filePath: configuration.appPath).lastPathComponent
         let appDestination = "\(configuration.volumeMountPath)/\(appFileName)"
 
         // Copy app
@@ -104,7 +117,7 @@ public struct DMGBuilder {
             withIntermediateDirectories: true
         )
 
-        let backgroundFileName = URL(fileURLWithPath: configuration.backgroundPath)
+        let backgroundFileName = URL(filePath: configuration.backgroundPath)
             .lastPathComponent
         let backgroundDestination = "\(backgroundDir)/\(backgroundFileName)"
         try fileManager.copyItem(
@@ -114,8 +127,8 @@ public struct DMGBuilder {
     }
 
     private func customizeDMG(configuration: DMGConfiguration) async throws {
-        let appFileName = URL(fileURLWithPath: configuration.appPath).lastPathComponent
-        let backgroundFileName = URL(fileURLWithPath: configuration.backgroundPath)
+        let appFileName = URL(filePath: configuration.appPath).lastPathComponent
+        let backgroundFileName = URL(filePath: configuration.backgroundPath)
             .lastPathComponent
 
         let script = AppleScriptGenerator.generateCustomizationScript(
@@ -154,21 +167,19 @@ public struct DMGBuilder {
             ])
     }
 
-    private func setDMGIcon(configuration: DMGConfiguration) throws {
-        try DMGIcon.setIcon(
-            dmgPath: configuration.outputPath,
-            appPath: configuration.appPath,
-            fileManager: fileManager
-        )
+    private func setDMGIcon(configuration: DMGConfiguration) async throws {
+        let dmgPath = configuration.outputPath
+        let appPath = configuration.appPath
+        try await MainActor.run {
+            try DMGIcon.setIcon(dmgPath: dmgPath, appPath: appPath)
+        }
     }
 
     private func signDMG(configuration: DMGConfiguration) async throws {
         guard let identity = configuration.signingIdentity else {
-            // No signing requested
             return
         }
 
-        // Sign the DMG using codesign
         try await shellExecutor.execute(
             "codesign",
             arguments: [
@@ -179,42 +190,24 @@ public struct DMGBuilder {
             ]
         )
 
-        // Verify the signature
         try await verifySignature(configuration: configuration)
     }
 
     private func verifySignature(configuration: DMGConfiguration) async throws {
-        // Use codesign --display --verbose to check the signature
-        let result = try await Subprocess.run(
-            .name("codesign"),
-            arguments: Arguments([
+        let output = try await shellExecutor.executeWithOutput(
+            "codesign",
+            arguments: [
                 "--display",
                 "--verbose=4",
                 configuration.outputPath,
-            ]),
-            output: .data(limit: 1024 * 1024),
-            error: .data(limit: 1024 * 1024)
+            ]
         )
 
-        guard result.terminationStatus.isSuccess else {
-            throw DMGBuilderError.commandFailed(
-                command: "codesign --display",
-                output: "Failed to verify signature"
-            )
-        }
-
-        // Check that Authority is present in the output (codesign writes to stderr)
-        let output = String(decoding: result.standardError, as: UTF8.self)
-
-        if !output.contains("Authority=") {
+        if !output.contains("\nAuthority=") && !output.hasPrefix("Authority=") {
             throw DMGBuilderError.commandFailed(
                 command: "codesign --display",
                 output: "No Authority flag found in signature. Output:\n\(output)"
             )
         }
-    }
-
-    private func cleanupTemporaryFiles(configuration: DMGConfiguration) throws {
-        try fileManager.removeItem(atPath: configuration.tempDMGPath)
     }
 }

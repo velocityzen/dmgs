@@ -1,4 +1,5 @@
 import ArgumentParser
+import DMGBuilder
 import Foundation
 import Markdown
 
@@ -25,24 +26,18 @@ extension DMGs {
                 throw ValidationError("File not found: \(inputPath)")
             }
 
-            do {
-                let source = try String(contentsOf: inputURL, encoding: .utf8)
-                let document = Document(parsing: source)
-                let result = slack
-                    ? SlackFormatter.format(document)
-                    : HTMLFormatter.format(document)
+            let source = try String(contentsOf: inputURL, encoding: .utf8)
+            let document = Document(parsing: source)
+            let result = slack
+                ? SlackFormatter.format(document)
+                : HTMLFormatter.format(document)
 
-                if let output {
-                    let outputURL = URL(filePath: output)
-                    try result.write(to: outputURL, atomically: true, encoding: .utf8)
-                    print("Written to \(output)")
-                } else {
-                    print(result)
-                }
-            } catch is ValidationError {
-                throw ValidationError("File not found: \(inputPath)")
-            } catch {
-                throw ValidationError(error.localizedDescription)
+            if let output {
+                let outputURL = URL(filePath: output)
+                try result.write(to: outputURL, atomically: true, encoding: .utf8)
+                FileHandle.standardError.write(Data("Written to \(output)\n".utf8))
+            } else {
+                print(result)
             }
         }
     }

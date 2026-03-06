@@ -6,11 +6,11 @@ import AppKit
 @Suite("DMG Configuration Tests")
 struct DMGConfigurationTests {
     // Helper to create a temporary test image
+    @MainActor
     func createTestImage(width: Int, height: Int) throws -> String {
         let tempDir = FileManager.default.temporaryDirectory
         let imagePath = tempDir.appendingPathComponent("test-\(UUID().uuidString).png").path
 
-        // Create a simple bitmap image with white background
         let bitmapRep = NSBitmapImageRep(
             bitmapDataPlanes: nil,
             pixelsWide: width,
@@ -30,7 +30,6 @@ struct DMGConfigurationTests {
                 userInfo: [NSLocalizedDescriptionKey: "Failed to create bitmap"])
         }
 
-        // Fill with white
         NSGraphicsContext.saveGraphicsState()
         let context = NSGraphicsContext(bitmapImageRep: bitmap)
         NSGraphicsContext.current = context
@@ -72,6 +71,7 @@ struct DMGConfigurationTests {
     }
 
     @Test("Configuration generates correct output path")
+    @MainActor
     func outputPath() async throws {
         let imagePath = try createTestImage(width: 600, height: 400)
         let appPath = try createTestApp(name: "TestApp")
@@ -93,6 +93,7 @@ struct DMGConfigurationTests {
     }
 
     @Test("Configuration generates correct temporary DMG path")
+    @MainActor
     func tempDMGPath() async throws {
         let imagePath = try createTestImage(width: 600, height: 400)
         let appPath = try createTestApp(name: "TestApp")
@@ -114,6 +115,7 @@ struct DMGConfigurationTests {
     }
 
     @Test("Configuration generates correct volume mount path")
+    @MainActor
     func volumeMountPath() async throws {
         let imagePath = try createTestImage(width: 600, height: 400)
         let appPath = try createTestApp(name: "TestApp")
@@ -134,6 +136,7 @@ struct DMGConfigurationTests {
     }
 
     @Test("Configuration uses custom settings when provided")
+    @MainActor
     func customSettings() async throws {
         let imagePath = try createTestImage(width: 600, height: 400)
         let appPath = try createTestApp(name: "CustomApp")
@@ -155,12 +158,13 @@ struct DMGConfigurationTests {
 
         #expect(config.volumeSize == "500m")
         #expect(config.iconSize == 150)
-        #expect(config.windowBounds.x == 100)
+        #expect(config.windowBounds.left == 100)
         #expect(config.appPosition.x == 200)
         #expect(config.applicationsPosition.x == 500)
     }
 
     @Test("Configuration calculates window bounds from image size")
+    @MainActor
     func autoWindowBounds() async throws {
         let imagePath = try createTestImage(width: 600, height: 400)
         let appPath = try createTestApp(name: "TestApp")
@@ -175,14 +179,14 @@ struct DMGConfigurationTests {
         )
 
         // Should be (400, 100, 400+600, 100+400+22) = (400, 100, 1000, 522)
-        // The +22 accounts for the window title bar
-        #expect(config.windowBounds.x == 400)
-        #expect(config.windowBounds.y == 100)
-        #expect(config.windowBounds.width == 1000)
-        #expect(config.windowBounds.height == 522)
+        #expect(config.windowBounds.left == 400)
+        #expect(config.windowBounds.top == 100)
+        #expect(config.windowBounds.right == 1000)
+        #expect(config.windowBounds.bottom == 522)
     }
 
     @Test("Configuration calculates app position from image size")
+    @MainActor
     func autoAppPosition() async throws {
         let imagePath = try createTestImage(width: 800, height: 600)
         let appPath = try createTestApp(name: "TestApp")
@@ -196,12 +200,12 @@ struct DMGConfigurationTests {
             backgroundPath: imagePath
         )
 
-        // Should be at 1/4 width, 1/2 height - 10 = (200, 290)
         #expect(config.appPosition.x == 200)
         #expect(config.appPosition.y == 290)
     }
 
     @Test("Configuration calculates Applications position from image size")
+    @MainActor
     func autoApplicationsPosition() async throws {
         let imagePath = try createTestImage(width: 800, height: 600)
         let appPath = try createTestApp(name: "TestApp")
@@ -215,9 +219,15 @@ struct DMGConfigurationTests {
             backgroundPath: imagePath
         )
 
-        // Should be at 3/4 width, 1/2 height - 10 = (600, 290)
         #expect(config.applicationsPosition.x == 600)
         #expect(config.applicationsPosition.y == 290)
+    }
+
+    @Test("Configuration sanitizes app name with path separators")
+    func sanitizeName() {
+        #expect(DMGConfiguration.sanitizeName("My/App") == "My-App")
+        #expect(DMGConfiguration.sanitizeName("My:App") == "My-App")
+        #expect(DMGConfiguration.sanitizeName("Normal App") == "Normal App")
     }
 }
 
@@ -227,10 +237,10 @@ struct DMGConfigurationStaticTests {
     func calculateWindowBounds() {
         let bounds = DMGConfiguration.calculateWindowBounds(imageSize: (width: 600, height: 400))
 
-        #expect(bounds.x == 400)
-        #expect(bounds.y == 100)
-        #expect(bounds.width == 1000)  // 400 + 600
-        #expect(bounds.height == 522)  // 100 + 400 + 22 (title bar)
+        #expect(bounds.left == 400)
+        #expect(bounds.top == 100)
+        #expect(bounds.right == 1000)  // 400 + 600
+        #expect(bounds.bottom == 522)  // 100 + 400 + 22 (title bar)
     }
 
     @Test("Calculate app position from image size")
@@ -360,6 +370,24 @@ struct AppleScriptGenerationTests {
         #expect(
             script.contains("position of item \"Applications\" of container window to {500, 400}"))
     }
+
+    @Test("Escapes special characters to prevent AppleScript injection")
+    func escapesSpecialCharacters() {
+        let script = AppleScriptGenerator.generateCustomizationScript(
+            volumeName: "Test\" & do shell script \"echo pwned",
+            appFileName: "Test\".app",
+            backgroundFileName: "bg\".png",
+            iconSize: 100,
+            windowBounds: (400, 100, 1000, 550),
+            appPosition: (150, 200),
+            applicationsPosition: (450, 200)
+        )
+
+        // Quotes should be escaped so AppleScript treats them as literals
+        #expect(script.contains("Test\\\" & do shell script \\\"echo pwned"))
+        #expect(script.contains("Test\\\".app"))
+        #expect(script.contains("bg\\\".png"))
+    }
 }
 
 @Suite("DMGBuilder Error Tests")
@@ -374,6 +402,12 @@ struct DMGBuilderErrorTests {
     func backgroundNotFoundMessage() {
         let error = DMGBuilderError.backgroundNotFound(path: "/test/bg.png")
         #expect(error.localizedDescription.contains("/test/bg.png"))
+    }
+
+    @Test("Invalid background image error has descriptive message")
+    func invalidBackgroundImageMessage() {
+        let error = DMGBuilderError.invalidBackgroundImage(path: "/test/corrupt.png")
+        #expect(error.localizedDescription.contains("/test/corrupt.png"))
     }
 
     @Test("Command failed error includes command and output")

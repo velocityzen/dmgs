@@ -8,12 +8,12 @@ extension DMGs {
             abstract: "Create a DMG installer (default command)"
         )
 
-        @Argument(help: "Path to the .app bundle", transform: { URL(fileURLWithPath: $0).path })
+        @Argument(help: "Path to the .app bundle", transform: { URL(filePath: $0).path() })
         var appPath: String
 
         @Argument(
             help: "Path to the background image for the DMG",
-            transform: { URL(fileURLWithPath: $0).path })
+            transform: { URL(filePath: $0).path() })
         var backgroundPath: String
 
         @Option(
@@ -32,46 +32,53 @@ extension DMGs {
         @Flag(name: .shortAndLong, help: "Show verbose output")
         var verbose: Bool = false
 
-        mutating func run() async throws {
-            do {
-                let configuration = try await DMGConfiguration(
-                    appPath: appPath,
-                    backgroundPath: backgroundPath,
-                    outputDirectory: output ?? FileManager.default.currentDirectoryPath,
-                    iconSize: iconSize,
-                    signingIdentity: sign
-                )
-
-                let builder = DMGBuilder()
-
-                if verbose {
-                    print("Configuration:")
-                    print("  App Name: \(configuration.appName)")
-                    print("  App Path: \(appPath)")
-                    print("  Background: \(backgroundPath)")
-                    print("  Output: \(configuration.outputPath)")
-                    print("  Icon Size: \(iconSize)")
-                    print("  Window Bounds: \(configuration.windowBounds)")
-                    print("  App Position: \(configuration.appPosition)")
-                    print("  Applications Position: \(configuration.applicationsPosition)")
-                    if let identity = sign {
-                        print("  Signing Identity: \(identity)")
-                    }
-                    print()
-                }
-
-                print("Creating DMG for \(configuration.appName)...")
-
-                if verbose { print("Validating configuration...") }
-                try builder.validate(configuration: configuration)
-
-                if verbose { print("Building DMG...") }
-                try await builder.build(configuration: configuration)
-
-                print("✓ Successfully created \(configuration.outputPath)")
-            } catch {
-                throw ValidationError(error.localizedDescription)
+        func validate() throws {
+            guard iconSize > 0 else {
+                throw ValidationError("Icon size must be positive")
             }
+        }
+
+        mutating func run() async throws {
+            let configuration = try await DMGConfiguration(
+                appPath: appPath,
+                backgroundPath: backgroundPath,
+                outputDirectory: output ?? FileManager.default.currentDirectoryPath,
+                iconSize: iconSize,
+                signingIdentity: sign
+            )
+
+            let builder = DMGBuilder()
+
+            if verbose {
+                let stderr = FileHandle.standardError
+                stderr.write(Data("Configuration:\n".utf8))
+                stderr.write(Data("  App Name: \(configuration.appName)\n".utf8))
+                stderr.write(Data("  App Path: \(appPath)\n".utf8))
+                stderr.write(Data("  Background: \(backgroundPath)\n".utf8))
+                stderr.write(Data("  Output: \(configuration.outputPath)\n".utf8))
+                stderr.write(Data("  Icon Size: \(iconSize)\n".utf8))
+                stderr.write(Data("  Window Bounds: \(configuration.windowBounds)\n".utf8))
+                stderr.write(Data("  App Position: \(configuration.appPosition)\n".utf8))
+                stderr.write(Data("  Applications Position: \(configuration.applicationsPosition)\n".utf8))
+                if let identity = sign {
+                    stderr.write(Data("  Signing Identity: \(identity)\n".utf8))
+                }
+                stderr.write(Data("\n".utf8))
+            }
+
+            FileHandle.standardError.write(Data("Creating DMG for \(configuration.appName)...\n".utf8))
+
+            if verbose {
+                FileHandle.standardError.write(Data("Validating configuration...\n".utf8))
+            }
+            try builder.validate(configuration: configuration)
+
+            if verbose {
+                FileHandle.standardError.write(Data("Building DMG...\n".utf8))
+            }
+            try await builder.build(configuration: configuration)
+
+            FileHandle.standardError.write(Data("✓ Successfully created \(configuration.outputPath)\n".utf8))
         }
     }
 }

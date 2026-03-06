@@ -18,26 +18,22 @@ let package = Package(
             name: "dmgs",
             dependencies: [
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
-                .product(name: "Markdown", package: "swift-markdown"),
                 "DMGBuilder",
             ]
         ),
         .target(
             name: "DMGBuilder",
             dependencies: [
-                .product(name: "Subprocess", package: "swift-subprocess")
+                .product(name: "Subprocess", package: "swift-subprocess"),
+                .product(name: "Markdown", package: "swift-markdown"),
             ]
         ),
         .testTarget(
             name: "DMGBuilderTests",
-            dependencies: ["DMGBuilder"],
-        ),
-        .testTarget(
-            name: "dmgsTests",
             dependencies: [
-                "dmgs",
+                "DMGBuilder",
                 .product(name: "Markdown", package: "swift-markdown"),
-            ]
+            ],
         ),
     ],
     swiftLanguageModes: [.v6],
