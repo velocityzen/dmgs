@@ -50,8 +50,10 @@ dmgs identities
 ### Convert Markdown to HTML or Slack mrkdwn
 
 ```bash
-dmgs markdown <input-path> [options]
+dmgs markdown [<input-path>] [options]
 ```
+
+Reads from stdin if no input path is specified.
 
 ### Arguments
 
@@ -113,6 +115,13 @@ Save to file:
 
 ```bash
 dmgs markdown "/path/to/changelog.md" --output "/path/to/output.html"
+```
+
+Pipe from stdin:
+
+```bash
+cat "/path/to/changelog.md" | dmgs markdown --slack
+echo "**bold text**" | dmgs markdown
 ```
 
 ### Testing
