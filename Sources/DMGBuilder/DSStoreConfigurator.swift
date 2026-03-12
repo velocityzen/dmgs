@@ -1,4 +1,5 @@
 import DSStore
+import FP
 import Foundation
 
 enum DSStoreConfigurator {
@@ -10,52 +11,78 @@ enum DSStoreConfigurator {
         windowBounds: (left: Int, top: Int, right: Int, bottom: Int),
         appPosition: (x: Int, y: Int),
         applicationsPosition: (x: Int, y: Int)
-    ) throws {
+    ) -> DMGBuilderResult<Void> {
         let backgroundFileURL =
             volumeURL
             .appending(path: ".background", directoryHint: .isDirectory)
             .appending(path: backgroundFileName)
-        let target = try DSStoreFolderTarget.resolve(folderURL: volumeURL)
-            .mapError()
-            .get()
-
-        let updatedStore = try target.readStore()
-            .flatMap { store in
-                applyWindowSettings(
-                    to: store,
-                    recordName: target.recordName,
-                    iconSize: iconSize,
-                    windowBounds: windowBounds
-                )
+        return Result<Void, DMGBuilderError>.Do
+            .bind {
+                DSStoreFolderTarget.resolve(folderURL: volumeURL)
+                    .mapError()
             }
-            .flatMap { store in
-                applyBackgroundImage(
-                    to: store,
+            .bind { target in
+                target.readStore()
+                    .mapError()
+            }
+            .bind { target, store in
+                configureStore(
+                    store: store,
                     recordName: target.recordName,
                     backgroundFileURL: backgroundFileURL,
-                    iconSize: iconSize
+                    appFileName: appFileName,
+                    iconSize: iconSize,
+                    windowBounds: windowBounds,
+                    appPosition: appPosition,
+                    applicationsPosition: applicationsPosition
                 )
             }
-            .flatMap { store in
-                applyIconLocation(
-                    to: store,
-                    itemName: appFileName,
-                    position: appPosition
-                )
+            .bind { target, _, updatedStore in
+                target.writeStore(updatedStore)
+                    .mapError()
             }
-            .flatMap { store in
-                applyIconLocation(
-                    to: store,
-                    itemName: "Applications",
-                    position: applicationsPosition
-                )
-            }
-            .mapError()
-            .get()
+            .map { _, _, _, _ in () }
+    }
 
-        try target.writeStore(updatedStore)
-            .mapError()
-            .get()
+    private static func configureStore(
+        store: DSStoreFile,
+        recordName: String,
+        backgroundFileURL: URL,
+        appFileName: String,
+        iconSize: Int,
+        windowBounds: (left: Int, top: Int, right: Int, bottom: Int),
+        appPosition: (x: Int, y: Int),
+        applicationsPosition: (x: Int, y: Int)
+    ) -> DMGBuilderResult<DSStoreFile> {
+        applyWindowSettings(
+            to: store,
+            recordName: recordName,
+            iconSize: iconSize,
+            windowBounds: windowBounds
+        )
+        .flatMap { updatedStore in
+            applyBackgroundImage(
+                to: updatedStore,
+                recordName: recordName,
+                backgroundFileURL: backgroundFileURL,
+                iconSize: iconSize
+            )
+        }
+        .flatMap { updatedStore in
+            applyIconLocation(
+                to: updatedStore,
+                itemName: appFileName,
+                position: appPosition
+            )
+        }
+        .flatMap { updatedStore in
+            applyIconLocation(
+                to: updatedStore,
+                itemName: "Applications",
+                position: applicationsPosition
+            )
+        }
+        .mapError()
     }
 
     private static func applyBackgroundImage(

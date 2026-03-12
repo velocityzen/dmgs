@@ -5,19 +5,19 @@ import AppKit
 @MainActor
 enum DMGIcon {
     /// Sets the DMG file icon by compositing the app icon onto a drive icon
-    static func setIcon(dmgPath: String, appPath: String) throws {
+    static func setIcon(dmgPath: String, appPath: String) -> DMGBuilderResult<Void> {
         let fileManager = FileManager.default
         let appURL = URL(filePath: appPath)
         let infoPlistPath = appURL.appending(path: "Contents/Info.plist").path()
 
         guard fileManager.fileExists(atPath: infoPlistPath) else {
-            return
+            return .success(())
         }
 
         guard let infoPlist = NSDictionary(contentsOfFile: infoPlistPath),
             let iconFileName = infoPlist["CFBundleIconFile"] as? String
         else {
-            return
+            return .success(())
         }
 
         let iconName = iconFileName.hasSuffix(".icns") ? iconFileName : "\(iconFileName).icns"
@@ -26,11 +26,16 @@ enum DMGIcon {
         guard fileManager.fileExists(atPath: iconPath),
             let appIcon = NSImage(contentsOfFile: iconPath)
         else {
-            return
+            return .success(())
         }
 
         let compositeIcon = createCompositeIcon(appIcon: appIcon)
-        NSWorkspace.shared.setIcon(compositeIcon, forFile: dmgPath)
+
+        guard NSWorkspace.shared.setIcon(compositeIcon, forFile: dmgPath) else {
+            return .failure(.iconUpdateFailed(path: dmgPath))
+        }
+
+        return .success(())
     }
 
     /// Creates a composite icon by overlaying the app icon on a generic drive icon

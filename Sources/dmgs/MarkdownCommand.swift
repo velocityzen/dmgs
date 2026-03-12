@@ -1,5 +1,6 @@
 import ArgumentParser
 import DMGBuilder
+import FP
 import Foundation
 import Markdown
 
@@ -20,36 +21,85 @@ extension DMGs {
         var slack: Bool = false
 
         mutating func run() async throws {
-            let source: String
+            try convertMarkdown().commandValue()
+        }
 
+        private func convertMarkdown() -> Result<Void, DMGsCommandError> {
+            readSource()
+                .map { Document(parsing: $0) }
+                .map { document in
+                    slack
+                        ? SlackFormatter.format(document)
+                        : HTMLFormatter.format(document)
+                }
+                .flatMap(writeOutput)
+        }
+
+        private func readSource() -> Result<String, DMGsCommandError> {
             if let inputPath {
-                let inputURL = URL(filePath: inputPath)
-
-                guard FileManager.default.fileExists(atPath: inputURL.path) else {
-                    throw ValidationError("File not found: \(inputPath)")
-                }
-
-                source = try String(contentsOf: inputURL, encoding: .utf8)
-            } else {
-                guard let data = try FileHandle.standardInput.readToEnd(),
-                      let text = String(data: data, encoding: .utf8)
-                else {
-                    throw ValidationError("Failed to read from stdin")
-                }
-                source = text
+                return readFile(at: inputPath)
             }
-            let document = Document(parsing: source)
-            let result = slack
-                ? SlackFormatter.format(document)
-                : HTMLFormatter.format(document)
 
-            if let output {
-                let outputURL = URL(filePath: output)
-                try result.write(to: outputURL, atomically: true, encoding: .utf8)
-                FileHandle.standardError.write(Data("Written to \(output)\n".utf8))
-            } else {
-                print(result)
+            return readStandardInput()
+        }
+
+        private func readFile(at path: String) -> Result<String, DMGsCommandError> {
+            let inputURL = URL(filePath: path)
+
+            guard FileManager.default.fileExists(atPath: inputURL.path) else {
+                return .failure(.fileNotFound(path: path))
             }
+
+            return Result<String, Error> {
+                try String(contentsOf: inputURL, encoding: .utf8)
+            }
+            .mapError {
+                .inputReadFailed(path: path, reason: $0.localizedDescription)
+            }
+        }
+
+        private func readStandardInput() -> Result<String, DMGsCommandError> {
+            Result<Data?, Error> {
+                try FileHandle.standardInput.readToEnd()
+            }
+            .mapError {
+                .standardInputReadFailed(reason: $0.localizedDescription)
+            }
+            .flatMap { data in
+                Result<Data, DMGsCommandError>.fromOptional(
+                    data,
+                    error: .standardInputReadFailed(reason: "No input received")
+                )
+            }
+            .flatMap { data in
+                Result<String, DMGsCommandError>.fromOptional(
+                    String(data: data, encoding: .utf8),
+                    error: .standardInputReadFailed(reason: "Input was not valid UTF-8")
+                )
+            }
+        }
+
+        private func writeOutput(_ html: String) -> Result<Void, DMGsCommandError> {
+            guard let output else {
+                print(html)
+                return .success(())
+            }
+
+            let outputURL = URL(filePath: output)
+
+            return Result<Void, Error> {
+                try html.write(to: outputURL, atomically: true, encoding: .utf8)
+            }
+            .mapError {
+                .outputWriteFailed(path: output, reason: $0.localizedDescription)
+            }
+            .tap { _ in
+                writeStandardError("Written to \(output)\n")
+            }
+        }
+
+        private func writeStandardError(_ message: String) {
+            FileHandle.standardError.write(Data(message.utf8))
         }
     }
 }

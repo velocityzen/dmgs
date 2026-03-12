@@ -10,6 +10,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/velocityzen/DSStore", from: "1.0.0"),
+        .package(url: "https://github.com/velocityzen/fp-swift", from: "1.5.0"),
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.5.0"),
         .package(url: "https://github.com/swiftlang/swift-subprocess.git", from: "0.2.0"),
         .package(url: "https://github.com/swiftlang/swift-markdown.git", from: "0.7.3"),
@@ -19,6 +20,7 @@ let package = Package(
             name: "dmgs",
             dependencies: [
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
+                .product(name: "FP", package: "fp-swift"),
                 "DMGBuilder",
             ]
         ),
@@ -26,6 +28,7 @@ let package = Package(
             name: "DMGBuilder",
             dependencies: [
                 .product(name: "DSStore", package: "DSStore"),
+                .product(name: "FP", package: "fp-swift"),
                 .product(name: "Subprocess", package: "swift-subprocess"),
                 .product(name: "Markdown", package: "swift-markdown"),
             ]

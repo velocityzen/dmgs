@@ -4,6 +4,16 @@ import AppKit
 import DSStore
 @testable import DMGBuilder
 
+private func unwrapSuccess<Success>(_ result: DMGBuilderResult<Success>) -> Success? {
+    switch result {
+        case .success(let value):
+            return value
+        case .failure(let error):
+            Issue.record("Unexpected failure: \(error.localizedDescription)")
+            return nil
+    }
+}
+
 @Suite("DMG Configuration Tests")
 struct DMGConfigurationTests {
     // Helper to create a temporary test image
@@ -81,14 +91,20 @@ struct DMGConfigurationTests {
             try? FileManager.default.removeItem(atPath: appPath)
         }
 
-        let config = try await DMGConfiguration(
-            appPath: appPath,
-            backgroundPath: imagePath,
-            outputDirectory: "/tmp",
-            windowBounds: (100, 100, 600, 400),
-            appPosition: (150, 200),
-            applicationsPosition: (450, 200)
-        )
+        guard
+            let config = unwrapSuccess(
+                await DMGConfiguration.make(
+                    appPath: appPath,
+                    backgroundPath: imagePath,
+                    outputDirectory: "/tmp",
+                    windowBounds: (100, 100, 600, 400),
+                    appPosition: (150, 200),
+                    applicationsPosition: (450, 200)
+                )
+            )
+        else {
+            return
+        }
 
         #expect(config.outputPath == "/tmp/TestApp.dmg")
     }
@@ -103,14 +119,20 @@ struct DMGConfigurationTests {
             try? FileManager.default.removeItem(atPath: appPath)
         }
 
-        let config = try await DMGConfiguration(
-            appPath: appPath,
-            backgroundPath: imagePath,
-            outputDirectory: "/tmp",
-            windowBounds: (100, 100, 600, 400),
-            appPosition: (150, 200),
-            applicationsPosition: (450, 200)
-        )
+        guard
+            let config = unwrapSuccess(
+                await DMGConfiguration.make(
+                    appPath: appPath,
+                    backgroundPath: imagePath,
+                    outputDirectory: "/tmp",
+                    windowBounds: (100, 100, 600, 400),
+                    appPosition: (150, 200),
+                    applicationsPosition: (450, 200)
+                )
+            )
+        else {
+            return
+        }
 
         #expect(config.tempDMGPath == "/tmp/TestApp-temp.dmg")
     }
@@ -125,13 +147,19 @@ struct DMGConfigurationTests {
             try? FileManager.default.removeItem(atPath: appPath)
         }
 
-        let config = try await DMGConfiguration(
-            appPath: appPath,
-            backgroundPath: imagePath,
-            windowBounds: (100, 100, 600, 400),
-            appPosition: (150, 200),
-            applicationsPosition: (450, 200)
-        )
+        guard
+            let config = unwrapSuccess(
+                await DMGConfiguration.make(
+                    appPath: appPath,
+                    backgroundPath: imagePath,
+                    windowBounds: (100, 100, 600, 400),
+                    appPosition: (150, 200),
+                    applicationsPosition: (450, 200)
+                )
+            )
+        else {
+            return
+        }
 
         #expect(config.volumeMountPath == "/Volumes/TestApp")
     }
@@ -146,16 +174,22 @@ struct DMGConfigurationTests {
             try? FileManager.default.removeItem(atPath: appPath)
         }
 
-        let config = try await DMGConfiguration(
-            appPath: appPath,
-            backgroundPath: imagePath,
-            outputDirectory: "/output",
-            volumeSize: "500m",
-            iconSize: 150,
-            windowBounds: (100, 200, 800, 600),
-            appPosition: (200, 300),
-            applicationsPosition: (500, 300)
-        )
+        guard
+            let config = unwrapSuccess(
+                await DMGConfiguration.make(
+                    appPath: appPath,
+                    backgroundPath: imagePath,
+                    outputDirectory: "/output",
+                    volumeSize: "500m",
+                    iconSize: 150,
+                    windowBounds: (100, 200, 800, 600),
+                    appPosition: (200, 300),
+                    applicationsPosition: (500, 300)
+                )
+            )
+        else {
+            return
+        }
 
         #expect(config.volumeSize == "500m")
         #expect(config.iconSize == 150)
@@ -174,10 +208,16 @@ struct DMGConfigurationTests {
             try? FileManager.default.removeItem(atPath: appPath)
         }
 
-        let config = try await DMGConfiguration(
-            appPath: appPath,
-            backgroundPath: imagePath
-        )
+        guard
+            let config = unwrapSuccess(
+                await DMGConfiguration.make(
+                    appPath: appPath,
+                    backgroundPath: imagePath
+                )
+            )
+        else {
+            return
+        }
 
         // Should be (400, 100, 400+600, 100+400+22) = (400, 100, 1000, 522)
         #expect(config.windowBounds.left == 400)
@@ -196,10 +236,16 @@ struct DMGConfigurationTests {
             try? FileManager.default.removeItem(atPath: appPath)
         }
 
-        let config = try await DMGConfiguration(
-            appPath: appPath,
-            backgroundPath: imagePath
-        )
+        guard
+            let config = unwrapSuccess(
+                await DMGConfiguration.make(
+                    appPath: appPath,
+                    backgroundPath: imagePath
+                )
+            )
+        else {
+            return
+        }
 
         #expect(config.appPosition.x == 200)
         #expect(config.appPosition.y == 290)
@@ -215,10 +261,16 @@ struct DMGConfigurationTests {
             try? FileManager.default.removeItem(atPath: appPath)
         }
 
-        let config = try await DMGConfiguration(
-            appPath: appPath,
-            backgroundPath: imagePath
-        )
+        guard
+            let config = unwrapSuccess(
+                await DMGConfiguration.make(
+                    appPath: appPath,
+                    backgroundPath: imagePath
+                )
+            )
+        else {
+            return
+        }
 
         #expect(config.applicationsPosition.x == 600)
         #expect(config.applicationsPosition.y == 290)
@@ -266,11 +318,18 @@ struct DMGConfigurationStaticTests {
 struct DMGBuilderValidationTests {
     @Test("Validation fails when app file doesn't exist")
     func appNotFound() async {
-        await #expect(throws: Error.self) {
-            try await DMGConfiguration(
-                appPath: "/nonexistent/Test.app",
-                backgroundPath: "/nonexistent/bg.png"
-            )
+        let result = await DMGConfiguration.make(
+            appPath: "/nonexistent/Test.app",
+            backgroundPath: "/nonexistent/bg.png"
+        )
+
+        switch result {
+            case .failure(.appNotFound(let path)):
+                #expect(path == "/nonexistent/Test.app")
+            case .failure(let error):
+                Issue.record("Expected appNotFound error, got \(error.localizedDescription)")
+            case .success:
+                Issue.record("Expected configuration creation to fail")
         }
     }
 }
@@ -340,15 +399,21 @@ struct DSStoreConfiguratorTests {
         defer { try? FileManager.default.removeItem(at: root) }
         defer { try? FileManager.default.removeItem(atPath: backgroundPath) }
 
-        try DSStoreConfigurator.configure(
-            volumeURL: volume,
-            appFileName: "Test.app",
-            backgroundFileName: "background.png",
-            iconSize: 100,
-            windowBounds: (left: 400, top: 100, right: 1000, bottom: 522),
-            appPosition: (x: 200, y: 290),
-            applicationsPosition: (x: 600, y: 290)
-        )
+        guard
+            unwrapSuccess(
+                DSStoreConfigurator.configure(
+                    volumeURL: volume,
+                    appFileName: "Test.app",
+                    backgroundFileName: "background.png",
+                    iconSize: 100,
+                    windowBounds: (left: 400, top: 100, right: 1000, bottom: 522),
+                    appPosition: (x: 200, y: 290),
+                    applicationsPosition: (x: 600, y: 290)
+                )
+            ) != nil
+        else {
+            return
+        }
 
         let target = try DSStoreFolderTarget.resolve(folderURL: volume).get()
         let store = try target.readStore().get()

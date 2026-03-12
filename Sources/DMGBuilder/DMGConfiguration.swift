@@ -1,3 +1,4 @@
+import FP
 import Foundation
 
 /// Configuration for creating a DMG
@@ -13,7 +14,31 @@ public struct DMGConfiguration: Sendable {
     public let applicationsPosition: (x: Int, y: Int)
     public let signingIdentity: String?
 
-    public init(
+    private init(
+        appName: String,
+        appPath: String,
+        backgroundPath: String,
+        outputDirectory: String,
+        volumeSize: String,
+        iconSize: Int,
+        windowBounds: (left: Int, top: Int, right: Int, bottom: Int),
+        appPosition: (x: Int, y: Int),
+        applicationsPosition: (x: Int, y: Int),
+        signingIdentity: String?
+    ) {
+        self.appName = appName
+        self.appPath = appPath
+        self.backgroundPath = backgroundPath
+        self.outputDirectory = outputDirectory
+        self.volumeSize = volumeSize
+        self.iconSize = iconSize
+        self.windowBounds = windowBounds
+        self.appPosition = appPosition
+        self.applicationsPosition = applicationsPosition
+        self.signingIdentity = signingIdentity
+    }
+
+    public static func make(
         appPath: String,
         backgroundPath: String,
         outputDirectory: String = FileManager.default.currentDirectoryPath,
@@ -23,49 +48,48 @@ public struct DMGConfiguration: Sendable {
         appPosition: (x: Int, y: Int)? = nil,
         applicationsPosition: (x: Int, y: Int)? = nil,
         signingIdentity: String? = nil
-    ) async throws {
-        // Extract app name from Info.plist and sanitize for path safety
-        self.appName = Self.sanitizeName(try Self.extractAppName(from: appPath))
-        self.appPath = appPath
-        self.backgroundPath = backgroundPath
-        self.outputDirectory = outputDirectory
-        self.volumeSize = volumeSize
-        self.iconSize = iconSize
-
-        // Validate signing identity if provided
-        if let identity = signingIdentity {
-            try await Self.validateSigningIdentity(identity)
-        }
-        self.signingIdentity = signingIdentity
-
-        // Get image size once
-        let imageSize = try await MainActor.run {
-            try ImageSize.getImageSize(at: backgroundPath)
-        }
-
-        // Resolve all positions and bounds
-        self.windowBounds = windowBounds ?? Self.calculateWindowBounds(imageSize: imageSize)
-        self.appPosition = appPosition ?? Self.calculateAppPosition(imageSize: imageSize)
-        self.applicationsPosition =
-            applicationsPosition ?? Self.calculateApplicationsPosition(imageSize: imageSize)
+    ) async -> DMGBuilderResult<Self> {
+        await Result<Void, DMGBuilderError>.success(())
+            .tap { validateAppPath(appPath) }
+            .tap { validateBackgroundPath(backgroundPath) }
+            .flatMap { _ in extractAppName(from: appPath).map(Self.sanitizeName) }
+            .bindAsync { _ in await resolveSigningIdentity(signingIdentity) }
+            .bindAsync { _, _ in await backgroundImageSize(at: backgroundPath) }
+            .map { appName, resolvedSigningIdentity, imageSize in
+                Self(
+                    appName: appName,
+                    appPath: appPath,
+                    backgroundPath: backgroundPath,
+                    outputDirectory: outputDirectory,
+                    volumeSize: volumeSize,
+                    iconSize: iconSize,
+                    windowBounds: windowBounds ?? Self.calculateWindowBounds(imageSize: imageSize),
+                    appPosition: appPosition ?? Self.calculateAppPosition(imageSize: imageSize),
+                    applicationsPosition:
+                        applicationsPosition
+                        ?? Self.calculateApplicationsPosition(imageSize: imageSize),
+                    signingIdentity: resolvedSigningIdentity
+                )
+            }
     }
 
     /// Extract app name from the app bundle's Info.plist
-    private static func extractAppName(from appPath: String) throws -> String {
+    private static func extractAppName(from appPath: String) -> DMGBuilderResult<String> {
         let infoPlistPath = "\(appPath)/Contents/Info.plist"
 
         guard let infoPlist = NSDictionary(contentsOfFile: infoPlistPath) else {
-            let bundleName = URL(filePath: appPath).deletingPathExtension().lastPathComponent
-            return bundleName
+            return .success(URL(filePath: appPath).deletingPathExtension().lastPathComponent)
         }
 
         if let displayName = infoPlist["CFBundleDisplayName"] as? String, !displayName.isEmpty {
-            return displayName
-        } else if let bundleName = infoPlist["CFBundleName"] as? String, !bundleName.isEmpty {
-            return bundleName
-        } else {
-            return URL(filePath: appPath).deletingPathExtension().lastPathComponent
+            return .success(displayName)
         }
+
+        if let bundleName = infoPlist["CFBundleName"] as? String, !bundleName.isEmpty {
+            return .success(bundleName)
+        }
+
+        return .success(URL(filePath: appPath).deletingPathExtension().lastPathComponent)
     }
 
     /// Removes path separators and other unsafe characters from the app name
@@ -75,9 +99,35 @@ public struct DMGConfiguration: Sendable {
             .replacing("\0", with: "")
     }
 
-    /// Validate that the signing identity exists in the keychain
-    private static func validateSigningIdentity(_ identity: String) async throws {
-        try await SigningIdentity.validate(identity)
+    private static func validateAppPath(_ appPath: String) -> DMGBuilderResult<Void> {
+        FileManager.default.fileExists(atPath: appPath)
+            ? .success(())
+            : .failure(.appNotFound(path: appPath))
+    }
+
+    private static func validateBackgroundPath(_ backgroundPath: String) -> DMGBuilderResult<Void> {
+        FileManager.default.fileExists(atPath: backgroundPath)
+            ? .success(())
+            : .failure(.backgroundNotFound(path: backgroundPath))
+    }
+
+    private static func resolveSigningIdentity(
+        _ signingIdentity: String?
+    ) async -> DMGBuilderResult<String?> {
+        guard let signingIdentity else {
+            return .success(nil)
+        }
+
+        return await SigningIdentity.validate(signingIdentity)
+            .map { signingIdentity }
+    }
+
+    private static func backgroundImageSize(
+        at backgroundPath: String
+    ) async -> DMGBuilderResult<(width: Int, height: Int)> {
+        await MainActor.run {
+            ImageSize.getImageSize(at: backgroundPath)
+        }
     }
 
     /// Calculate window bounds from image size
