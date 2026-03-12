@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 import AppKit
+import DSStore
 @testable import DMGBuilder
 
 @Suite("DMG Configuration Tests")
@@ -274,119 +275,156 @@ struct DMGBuilderValidationTests {
     }
 }
 
-@Suite("AppleScript Generation Tests")
-struct AppleScriptGenerationTests {
-    @Test("Generates script with volume name")
-    func containsVolumeName() {
-        let script = AppleScriptGenerator.generateCustomizationScript(
-            volumeName: "TestApp",
+@Suite("DSStore Configuration Tests")
+struct DSStoreConfiguratorTests {
+    @MainActor
+    private func createTestImage(width: Int, height: Int) throws -> String {
+        let tempDir = FileManager.default.temporaryDirectory
+        let imagePath = tempDir.appendingPathComponent("test-\(UUID().uuidString).png").path
+
+        let bitmapRep = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: width,
+            pixelsHigh: height,
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: width * 4,
+            bitsPerPixel: 32
+        )
+
+        guard let bitmap = bitmapRep else {
+            throw NSError(
+                domain: "TestError", code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "Failed to create bitmap"])
+        }
+
+        NSGraphicsContext.saveGraphicsState()
+        let context = NSGraphicsContext(bitmapImageRep: bitmap)
+        NSGraphicsContext.current = context
+        NSColor.white.setFill()
+        NSRect(x: 0, y: 0, width: width, height: height).fill()
+        NSGraphicsContext.restoreGraphicsState()
+
+        guard let pngData = bitmap.representation(using: .png, properties: [:]) else {
+            throw NSError(
+                domain: "TestError", code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "Failed to create PNG data"])
+        }
+
+        try pngData.write(to: URL(fileURLWithPath: imagePath))
+        return imagePath
+    }
+
+    @Test("Writes window and icon records for mounted volume")
+    @MainActor
+    func writesFinderRecords() async throws {
+        let root = FileManager.default.temporaryDirectory.appending(
+            path: UUID().uuidString,
+            directoryHint: .isDirectory
+        )
+        let volume = root.appending(path: "TestVolume", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: volume, withIntermediateDirectories: true)
+        let backgroundDirectory = volume.appending(path: ".background", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(
+            at: backgroundDirectory,
+            withIntermediateDirectories: true
+        )
+        let backgroundPath = try createTestImage(width: 600, height: 400)
+        try FileManager.default.copyItem(
+            at: URL(filePath: backgroundPath),
+            to: backgroundDirectory.appending(path: "background.png")
+        )
+        defer { try? FileManager.default.removeItem(at: root) }
+        defer { try? FileManager.default.removeItem(atPath: backgroundPath) }
+
+        try DSStoreConfigurator.configure(
+            volumeURL: volume,
             appFileName: "Test.app",
             backgroundFileName: "background.png",
             iconSize: 100,
-            windowBounds: (400, 100, 1000, 550),
-            appPosition: (150, 200),
-            applicationsPosition: (450, 200)
+            windowBounds: (left: 400, top: 100, right: 1000, bottom: 522),
+            appPosition: (x: 200, y: 290),
+            applicationsPosition: (x: 600, y: 290)
         )
 
-        #expect(script.contains("TestApp"))
-        #expect(script.contains("tell disk \"TestApp\""))
-    }
+        let target = try DSStoreFolderTarget.resolve(folderURL: volume).get()
+        let store = try target.readStore().get()
+        let recordName = target.recordName
 
-    @Test("Generates script with app filename")
-    func containsAppFilename() {
-        let script = AppleScriptGenerator.generateCustomizationScript(
-            volumeName: "TestApp",
-            appFileName: "MyCustomApp.app",
-            backgroundFileName: "background.png",
-            iconSize: 100,
-            windowBounds: (400, 100, 1000, 550),
-            appPosition: (150, 200),
-            applicationsPosition: (450, 200)
-        )
+        #expect(store.windowFrame(for: recordName)?.x == 400)
+        #expect(store.windowFrame(for: recordName)?.y == 100)
+        #expect(store.windowFrame(for: recordName)?.width == 600)
+        #expect(store.windowFrame(for: recordName)?.height == 422)
+        #expect(store.windowFrame(for: recordName)?.view == "icnv")
 
-        #expect(script.contains("MyCustomApp.app"))
-        #expect(script.contains("position of item \"MyCustomApp.app\""))
-    }
+        let windowSettings = store.windowSettings(for: recordName)
+        #expect(windowSettings?.showSidebar == false)
+        #expect(windowSettings?.showStatusBar == false)
+        #expect(windowSettings?.showToolbar == false)
 
-    @Test("Generates script with background filename")
-    func containsBackgroundFilename() {
-        let script = AppleScriptGenerator.generateCustomizationScript(
-            volumeName: "TestApp",
-            appFileName: "Test.app",
-            backgroundFileName: "custom-bg.jpg",
-            iconSize: 100,
-            windowBounds: (400, 100, 1000, 550),
-            appPosition: (150, 200),
-            applicationsPosition: (450, 200)
-        )
+        let iconViewEntry = store.entries.first {
+            $0.filename == recordName && $0.structureID == "icvo"
+        }
+        #expect(iconViewEntry != nil)
+        if case .blob(let iconViewData)? = iconViewEntry?.value {
+            #expect(iconViewData.prefix(4) == Data([0x69, 0x63, 0x76, 0x34]))
+            #expect(iconViewData[4...5] == Data([0x00, 0x64]))
+            #expect(iconViewData[6...9] == Data("none".utf8))
+        } else {
+            Issue.record("Expected icvo blob record")
+        }
 
-        #expect(script.contains("custom-bg.jpg"))
-        #expect(script.contains(".background:custom-bg.jpg"))
-    }
+        let appLocation = store.entries.first {
+            $0.filename == "Test.app" && $0.structureID == "Iloc"
+        }
+        let applicationsLocation = store.entries.first {
+            $0.filename == "Applications" && $0.structureID == "Iloc"
+        }
+        #expect(appLocation != nil)
+        #expect(applicationsLocation != nil)
+        if case .blob(let appLocationData)? = appLocation?.value {
+            #expect(
+                appLocationData.prefix(8) == Data([0x00, 0x00, 0x00, 0xC8, 0x00, 0x00, 0x01, 0x22]))
+        } else {
+            Issue.record("Expected app Iloc blob record")
+        }
+        if case .blob(let applicationsLocationData)? = applicationsLocation?.value {
+            #expect(
+                applicationsLocationData.prefix(8)
+                    == Data([0x00, 0x00, 0x02, 0x58, 0x00, 0x00, 0x01, 0x22]))
+        } else {
+            Issue.record("Expected Applications Iloc blob record")
+        }
 
-    @Test("Generates script with custom icon size")
-    func containsIconSize() {
-        let script = AppleScriptGenerator.generateCustomizationScript(
-            volumeName: "TestApp",
-            appFileName: "Test.app",
-            backgroundFileName: "background.png",
-            iconSize: 150,
-            windowBounds: (400, 100, 1000, 550),
-            appPosition: (150, 200),
-            applicationsPosition: (450, 200)
-        )
+        let iconViewPlistEntry = store.entries.first {
+            $0.filename == recordName && $0.structureID == "icvp"
+        }
+        #expect(iconViewPlistEntry != nil)
+        if case .blob(let iconViewPlistData)? = iconViewPlistEntry?.value {
+            let plist =
+                try PropertyListSerialization.propertyList(
+                    from: iconViewPlistData,
+                    format: nil
+                ) as? [String: Any]
+            #expect(plist?["backgroundType"] as? Int == 2)
+            #expect(plist?["arrangeBy"] as? String == "none")
+            #expect((plist?["backgroundImageAlias"] as? Data)?.isEmpty == false)
+        } else {
+            Issue.record("Expected icvp blob record")
+        }
 
-        #expect(script.contains("icon size of viewOptions to 150"))
-    }
-
-    @Test("Generates script with window bounds")
-    func containsWindowBounds() {
-        let script = AppleScriptGenerator.generateCustomizationScript(
-            volumeName: "TestApp",
-            appFileName: "Test.app",
-            backgroundFileName: "background.png",
-            iconSize: 100,
-            windowBounds: (100, 200, 800, 600),
-            appPosition: (150, 200),
-            applicationsPosition: (450, 200)
-        )
-
-        #expect(script.contains("bounds of container window to {100, 200, 800, 600}"))
-    }
-
-    @Test("Generates script with item positions")
-    func containsItemPositions() {
-        let script = AppleScriptGenerator.generateCustomizationScript(
-            volumeName: "TestApp",
-            appFileName: "Test.app",
-            backgroundFileName: "background.png",
-            iconSize: 100,
-            windowBounds: (400, 100, 1000, 550),
-            appPosition: (200, 300),
-            applicationsPosition: (500, 400)
-        )
-
-        #expect(script.contains("position of item \"Test.app\" of container window to {200, 300}"))
-        #expect(
-            script.contains("position of item \"Applications\" of container window to {500, 400}"))
-    }
-
-    @Test("Escapes special characters to prevent AppleScript injection")
-    func escapesSpecialCharacters() {
-        let script = AppleScriptGenerator.generateCustomizationScript(
-            volumeName: "Test\" & do shell script \"echo pwned",
-            appFileName: "Test\".app",
-            backgroundFileName: "bg\".png",
-            iconSize: 100,
-            windowBounds: (400, 100, 1000, 550),
-            appPosition: (150, 200),
-            applicationsPosition: (450, 200)
-        )
-
-        // Quotes should be escaped so AppleScript treats them as literals
-        #expect(script.contains("Test\\\" & do shell script \\\"echo pwned"))
-        #expect(script.contains("Test\\\".app"))
-        #expect(script.contains("bg\\\".png"))
+        let backgroundBookmarkEntry = store.entries.first {
+            $0.filename == recordName && $0.structureID == "pBBk"
+        }
+        #expect(backgroundBookmarkEntry != nil)
+        if case .blob(let backgroundBookmarkData)? = backgroundBookmarkEntry?.value {
+            #expect(backgroundBookmarkData.prefix(4) == Data("book".utf8))
+        } else {
+            Issue.record("Expected pBBk blob record")
+        }
     }
 }
 

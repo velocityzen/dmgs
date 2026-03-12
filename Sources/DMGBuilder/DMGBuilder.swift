@@ -1,4 +1,5 @@
 import Foundation
+import DSStore
 import Subprocess
 
 /// Main DMG builder that orchestrates the creation process
@@ -131,8 +132,8 @@ public struct DMGBuilder {
         let backgroundFileName = URL(filePath: configuration.backgroundPath)
             .lastPathComponent
 
-        let script = AppleScriptGenerator.generateCustomizationScript(
-            volumeName: configuration.appName,
+        try DSStoreConfigurator.configure(
+            volumeURL: URL(filePath: configuration.volumeMountPath),
             appFileName: appFileName,
             backgroundFileName: backgroundFileName,
             iconSize: configuration.iconSize,
@@ -140,11 +141,6 @@ public struct DMGBuilder {
             appPosition: configuration.appPosition,
             applicationsPosition: configuration.applicationsPosition
         )
-
-        try await shellExecutor.executeAppleScript(script)
-
-        // Wait for Finder to apply changes
-        try await Task.sleep(nanoseconds: 2_000_000_000)
     }
 
     private func unmountDMG(configuration: DMGConfiguration) async throws {

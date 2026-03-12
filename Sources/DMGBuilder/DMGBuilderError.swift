@@ -6,7 +6,7 @@ public enum DMGBuilderError: LocalizedError {
     case backgroundNotFound(path: String)
     case invalidBackgroundImage(path: String)
     case commandFailed(command: String, output: String)
-    case appleScriptFailed(output: String)
+    case dsStoreFailed(output: String)
     case volumeNotMounted(path: String)
 
     public var errorDescription: String? {
@@ -19,8 +19,8 @@ public enum DMGBuilderError: LocalizedError {
                 "Unable to read background image at path: \(path)"
             case .commandFailed(let command, let output):
                 "Command failed: \(command)\n\(output)"
-            case .appleScriptFailed(let output):
-                "AppleScript failed: \(output)"
+            case .dsStoreFailed(let output):
+                "DS_Store update failed: \(output)"
             case .volumeNotMounted(let path):
                 "Volume not mounted at path: \(path)"
         }
