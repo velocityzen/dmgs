@@ -149,7 +149,7 @@ swift test
    - Copies background image to `.background` folder
 
 3. **Customization**
-   - Uses AppleScript to customize Finder window
+   - Writes a `.DS_Store` file directly
    - Sets window bounds to match background image perfectly
    - Positions icons automatically based on image dimensions
    - Applies background image and icon size settings
