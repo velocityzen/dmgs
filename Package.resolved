@@ -1,6 +1,15 @@
 {
-  "originHash" : "99518e27700867ddb0764d2d7e5f60d56c92c51a9a147c09ffb24190be6f767c",
+  "originHash" : "4fae4db30c69126669bfe2295642f3be5274fd2584528c14e15b6eaed5918e83",
   "pins" : [
+    {
+      "identity" : "dsstore",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/velocityzen/DSStore",
+      "state" : {
+        "revision" : "7ef7b8cc996c03182ed0e146bc5767a108574bd2",
+        "version" : "1.0.0"
+      }
+    },
     {
       "identity" : "fp-swift",
       "kind" : "remoteSourceControl",

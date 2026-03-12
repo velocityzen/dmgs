@@ -9,7 +9,7 @@ let package = Package(
         .macOS(.v15)
     ],
     dependencies: [
-        .package(path: "../DSStore"),
+        .package(url: "https://github.com/velocityzen/DSStore", from: "1.0.0"),
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.5.0"),
         .package(url: "https://github.com/swiftlang/swift-subprocess.git", from: "0.2.0"),
         .package(url: "https://github.com/swiftlang/swift-markdown.git", from: "0.7.3"),
