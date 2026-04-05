@@ -10,7 +10,7 @@ public struct SlackFormatter: MarkupVisitor {
     }
 
     public mutating func visitDocument(_ document: Document) -> String {
-        document.children.map { visit($0) }.joined(separator: "\n\n")
+        document.children.map { visit($0) }.joined(separator: "\\n\\n")
     }
 
     public mutating func visitParagraph(_ paragraph: Paragraph) -> String {
@@ -41,7 +41,7 @@ public struct SlackFormatter: MarkupVisitor {
     }
 
     public mutating func visitCodeBlock(_ codeBlock: CodeBlock) -> String {
-        "```\n\(codeBlock.code)```"
+        "```\(codeBlock.code)```"
     }
 
     public mutating func visitLink(_ link: Link) -> String {
@@ -58,15 +58,16 @@ public struct SlackFormatter: MarkupVisitor {
 
     public mutating func visitHeading(_ heading: Heading) -> String {
         let content = heading.children.map { visit($0) }.joined()
-        return "*\(content)*\n"
+        return "*\(content)*\\n"
     }
 
     public mutating func visitBlockQuote(_ blockQuote: BlockQuote) -> String {
-        let content = blockQuote.children.map { visit($0) }.joined(separator: "\n")
-        return content
-            .split(separator: "\n", omittingEmptySubsequences: false)
+        let content = blockQuote.children.map { visit($0) }.joined(separator: "\\n")
+        return
+            content
+            .split(separator: "\\n", omittingEmptySubsequences: false)
             .map { "> \($0)" }
-            .joined(separator: "\n")
+            .joined(separator: "\\n")
     }
 
     public mutating func visitOrderedList(_ orderedList: OrderedList) -> String {
@@ -75,11 +76,11 @@ public struct SlackFormatter: MarkupVisitor {
         listDepth += 1
         var lines: [String] = []
         for (index, item) in orderedList.listItems.enumerated() {
-            let content = item.children.map { visit($0) }.joined(separator: "\n")
+            let content = item.children.map { visit($0) }.joined(separator: "\\n")
             lines.append("\(indent)\(startIndex + index). \(content)")
         }
         listDepth -= 1
-        return lines.joined(separator: "\n")
+        return lines.joined(separator: "\\n")
     }
 
     public mutating func visitUnorderedList(_ unorderedList: UnorderedList) -> String {
@@ -87,11 +88,11 @@ public struct SlackFormatter: MarkupVisitor {
         listDepth += 1
         var lines: [String] = []
         for item in unorderedList.listItems {
-            let content = item.children.map { visit($0) }.joined(separator: "\n")
+            let content = item.children.map { visit($0) }.joined(separator: "\\n")
             lines.append("\(indent)• \(content)")
         }
         listDepth -= 1
-        return lines.joined(separator: "\n")
+        return lines.joined(separator: "\\n")
     }
 
     public mutating func visitThematicBreak(_ thematicBreak: ThematicBreak) -> String {
@@ -99,11 +100,11 @@ public struct SlackFormatter: MarkupVisitor {
     }
 
     public mutating func visitLineBreak(_ lineBreak: LineBreak) -> String {
-        "\n"
+        "\\n"
     }
 
     public mutating func visitSoftBreak(_ softBreak: SoftBreak) -> String {
-        "\n"
+        "\\n"
     }
 
     public static func format(_ document: Document) -> String {
