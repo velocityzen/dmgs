@@ -41,7 +41,8 @@ public struct SlackFormatter: MarkupVisitor {
     }
 
     public mutating func visitCodeBlock(_ codeBlock: CodeBlock) -> String {
-        "```\(codeBlock.code)```"
+        let code = codeBlock.code.replacingOccurrences(of: "\n", with: "\\n")
+        return "```\\n\(code)```"
     }
 
     public mutating func visitLink(_ link: Link) -> String {

@@ -41,7 +41,7 @@ struct SlackFormatterTests {
         """
         let document = Document(parsing: markdown)
         let result = SlackFormatter.format(document)
-        #expect(result == "```\nlet x = 42\n```")
+        #expect(result == "```\\nlet x = 42\\n```")
     }
 
     @Test("converts code blocks without language")
@@ -53,7 +53,7 @@ struct SlackFormatterTests {
         """
         let document = Document(parsing: markdown)
         let result = SlackFormatter.format(document)
-        #expect(result == "```\nhello\n```")
+        #expect(result == "```\\nhello\\n```")
     }
 
     @Test("converts links")
@@ -75,14 +75,14 @@ struct SlackFormatterTests {
     func heading() {
         let document = Document(parsing: "# My Title")
         let result = SlackFormatter.format(document)
-        #expect(result == "*My Title*\n")
+        #expect(result == "*My Title*\\n")
     }
 
     @Test("converts all heading levels to bold")
     func headingLevels() {
         let document = Document(parsing: "## Subtitle")
         let result = SlackFormatter.format(document)
-        #expect(result == "*Subtitle*\n")
+        #expect(result == "*Subtitle*\\n")
     }
 
     @Test("converts unordered lists")
@@ -94,7 +94,7 @@ struct SlackFormatterTests {
         """
         let document = Document(parsing: markdown)
         let result = SlackFormatter.format(document)
-        #expect(result == "• First\n• Second\n• Third")
+        #expect(result == "• First\\n• Second\\n• Third")
     }
 
     @Test("converts ordered lists")
@@ -106,7 +106,7 @@ struct SlackFormatterTests {
         """
         let document = Document(parsing: markdown)
         let result = SlackFormatter.format(document)
-        #expect(result == "1. First\n2. Second\n3. Third")
+        #expect(result == "1. First\\n2. Second\\n3. Third")
     }
 
     @Test("converts blockquotes with space after >")
@@ -162,7 +162,7 @@ struct SlackFormatterTests {
         """
         let document = Document(parsing: markdown)
         let result = SlackFormatter.format(document)
-        #expect(result == "First paragraph.\n\nSecond paragraph.")
+        #expect(result == "First paragraph.\\n\\nSecond paragraph.")
     }
 
     @Test("handles empty document")
@@ -230,7 +230,7 @@ struct SlackFormatterTests {
         """
         let document = Document(parsing: markdown)
         let result = SlackFormatter.format(document)
-        #expect(result == "Here is a list:\n\n• one\n• two")
+        #expect(result == "Here is a list:\\n\\n• one\\n• two")
     }
 
     @Test("heading followed by paragraph has newline separation")
@@ -242,7 +242,7 @@ struct SlackFormatterTests {
         """
         let document = Document(parsing: markdown)
         let result = SlackFormatter.format(document)
-        #expect(result == "*Title*\n\n\nSome content here.")
+        #expect(result == "*Title*\\n\\n\\nSome content here.")
     }
 
     @Test("multiple blocks separated by double newlines")
@@ -256,7 +256,7 @@ struct SlackFormatterTests {
         """
         let document = Document(parsing: markdown)
         let result = SlackFormatter.format(document)
-        #expect(result == "First paragraph.\n\n> A quote\n\nLast paragraph.")
+        #expect(result == "First paragraph.\\n\\n> A quote\\n\\nLast paragraph.")
     }
 
     @Test("code block between paragraphs")
@@ -272,7 +272,7 @@ struct SlackFormatterTests {
         """
         let document = Document(parsing: markdown)
         let result = SlackFormatter.format(document)
-        #expect(result == "Before code.\n\n```\nlet x = 1\n```\n\nAfter code.")
+        #expect(result == "Before code.\\n\\n```\\nlet x = 1\\n```\\n\\nAfter code.")
     }
 
     @Test("email link format")
@@ -293,7 +293,7 @@ struct SlackFormatterTests {
         """
         let document = Document(parsing: markdown)
         let result = SlackFormatter.format(document)
-        #expect(result == "```\nline 1\nline 2\nline 3\n```")
+        #expect(result == "```\\nline 1\\nline 2\\nline 3\\n```")
     }
 
     @Test("ordered list starting from custom number")
@@ -305,7 +305,7 @@ struct SlackFormatterTests {
         """
         let document = Document(parsing: markdown)
         let result = SlackFormatter.format(document)
-        #expect(result == "3. Third\n4. Fourth\n5. Fifth")
+        #expect(result == "3. Third\\n4. Fourth\\n5. Fifth")
     }
 
     @Test("nested ordered list with indentation")
@@ -334,7 +334,7 @@ struct SlackFormatterTests {
         let markdown = "Line one\nLine two"
         let document = Document(parsing: markdown)
         let result = SlackFormatter.format(document)
-        #expect(result == "Line one\nLine two")
+        #expect(result == "Line one\\nLine two")
     }
 
     @Test("hard line break within paragraph")
@@ -343,7 +343,7 @@ struct SlackFormatterTests {
         let markdown = "Line one  \nLine two"
         let document = Document(parsing: markdown)
         let result = SlackFormatter.format(document)
-        #expect(result == "Line one\nLine two")
+        #expect(result == "Line one\\nLine two")
     }
 
     @Test("all formatting combined in document")
@@ -362,7 +362,7 @@ struct SlackFormatterTests {
         """
         let document = Document(parsing: markdown)
         let result = SlackFormatter.format(document)
-        #expect(result.contains("*Release Notes*\n"))
+        #expect(result.contains("*Release Notes*\\n"))
         #expect(result.contains("*major*"))
         #expect(result.contains("• New _feature_ one"))
         #expect(result.contains("• Bug ~fix~ two"))
