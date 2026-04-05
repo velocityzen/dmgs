@@ -10,7 +10,7 @@ struct DMGs: AsyncParsableCommand {
             proper icon positioning, and an Applications folder symlink.
             The app name is automatically extracted from the .app bundle.
             """,
-        version: "1.2.1",
+        version: "1.2.2",
         subcommands: [
             Create.self,
             Identities.self,
